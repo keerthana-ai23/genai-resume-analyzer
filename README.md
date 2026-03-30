@@ -1,30 +1,24 @@
 # 🚀 Gen AI Resume Analyzer (RAG-based)
 
-This project is a Generative AI-powered Resume Analyzer that evaluates resumes against job descriptions using Retrieval-Augmented Generation (RAG).
+## 📌 Overview
+This project is a Generative AI-powered Resume Analyzer that compares resumes with job descriptions using Retrieval-Augmented Generation (RAG).
 
-## 🔍 Features
-- Upload resume (PDF)
-- Compare with job description
-- Extract skills and match score
-- Identify missing skills
-- Generate AI-powered feedback
+## 🔥 Features
+- Upload Resume (PDF)
+- Paste Job Description
+- AI-based Resume Analysis
+- Match Score (%)
+- Missing Skills Detection
+- Improvement Suggestions
 
-## ⚙️ Tech Stack
+## 🛠 Tech Stack
 - Python
+- Streamlit
 - LangChain
 - OpenAI API
-- FAISS (Vector Database)
-- Streamlit
+- FAISS / Embeddings
 
-## 🧠 How it Works
-1. Resume is parsed and split into chunks  
-2. Embeddings are created using OpenAI  
-3. Stored in FAISS vector database  
-4. Retrieved context is passed to LLM  
-5. AI generates insights and feedback  
-
-## ▶️ Run Locally
-
+## ▶️ How to Run
 ```bash
 pip install -r requirements.txt
 streamlit run app.py

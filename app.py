@@ -3,31 +3,31 @@ import os
 import tempfile
 from dotenv import load_dotenv
 
-# Load API key from .env
+# Load API key
 load_dotenv()
 
-# Imports
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
-# UI Title
 st.title("🤖 AI Resume Analyzer")
 
-# Upload PDF
+# Upload resume
 uploaded_file = st.file_uploader("Upload your resume (PDF)", type="pdf")
 
+# Job description input
+job_description = st.text_area("📌 Paste Job Description")
+
+docs = []
+
 if uploaded_file is not None:
-    # Save file temporarily
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         tmp_file.write(uploaded_file.read())
         temp_path = tmp_file.name
 
-    # Load PDF
     loader = PyPDFLoader(temp_path)
     documents = loader.load()
 
-    # Split text
     splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs = splitter.split_documents(documents)
 
@@ -35,37 +35,46 @@ if uploaded_file is not None:
     for doc in docs:
         st.write(doc.page_content)
 
-    # Create embeddings
-    embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectors = embeddings.embed_documents([doc.page_content for doc in docs])
 
     st.subheader("🧠 Embeddings Created:")
-    st.write(f"Number of chunks: {len(vectors)}")
-    st.write(f"Vector size: {len(vectors[0])}")
+    st.write(f"Chunks: {len(vectors)}")
 
-    # 💬 Question input (RAG)
-    st.subheader("💬 Ask Questions About Your Resume")
-    query = st.text_input("Ask something:")
+# Query input
+st.subheader("💬 Ask Questions / Analyze Resume")
+query = st.text_input("Ask something:")
 
-    if query:
-        llm = ChatOpenAI(model="gpt-3.5-turbo")
+if query and docs and job_description:
+    llm = ChatOpenAI(model="gpt-4o-mini")
 
-        # Combine all resume text
-        context = "\n".join([doc.page_content for doc in docs])
+    context = "\n".join([doc.page_content for doc in docs])
 
-        prompt = f"""
-        You are an AI resume assistant.
+  prompt = f"""
+You are an AI resume evaluator.
 
-        Answer the question based only on the resume below.
+Compare the resume with the job description.
 
-        Resume:
-        {context}
+Resume:
+{context}
 
-        Question:
-        {query}
-        """
+Job Description:
+{job_description}
 
-        response = llm.invoke(prompt)
+Return output in this format:
 
-        st.subheader("🤖 Answer:")
-        st.write(response.content)
+Match Score: XX%
+
+Missing Skills:
+- skill1
+- skill2
+
+Suggestions:
+- suggestion1
+- suggestion2
+"""
+
+    response = llm.invoke(prompt)
+
+    st.subheader("📊 Resume Analysis:")
+    st.write(response.content)

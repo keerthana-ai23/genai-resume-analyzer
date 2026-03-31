@@ -1,67 +1,108 @@
 import streamlit as st
 import os
 import tempfile
+import re
 from dotenv import load_dotenv
 
 # Load API key
 load_dotenv()
 
+# Imports
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores import FAISS
 
-st.title("🤖 AI Resume Analyzer")
+# UI Title
+st.title("🤖 AI Resume Analyzer (RAG + Scoring)")
 
-# Upload resume
+# Upload PDF
 uploaded_file = st.file_uploader("Upload your resume (PDF)", type="pdf")
 
-# Job description input
-job_description = st.text_area("📌 Paste Job Description")
-
-docs = []
-
 if uploaded_file is not None:
+
+    # Save file temporarily
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         tmp_file.write(uploaded_file.read())
         temp_path = tmp_file.name
 
+    # Load PDF
     loader = PyPDFLoader(temp_path)
     documents = loader.load()
 
+    # Split text
     splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs = splitter.split_documents(documents)
 
-    st.subheader("📄 Resume Content:")
-    for doc in docs:
-        st.write(doc.page_content)
+    st.subheader("📄 Resume Preview")
+    st.write(docs[0].page_content[:500] + "...")
 
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    vectors = embeddings.embed_documents([doc.page_content for doc in docs])
+    # -------------------------------
+    # 🔥 RAG Setup
+    # -------------------------------
+    embeddings = OpenAIEmbeddings()
+    db = FAISS.from_documents(docs, embeddings)
+    retriever = db.as_retriever()
 
-    st.subheader("🧠 Embeddings Created:")
-    st.write(f"Chunks: {len(vectors)}")
+    st.success("✅ RAG Ready (Embeddings + Retrieval)")
 
-# Query input
-st.subheader("💬 Ask Questions / Analyze Resume")
-query = st.text_input("Ask something:")
+    # -------------------------------
+    # 💬 Ask Questions
+    # -------------------------------
+    st.subheader("💬 Ask Questions About Your Resume")
 
-if query and docs and job_description:
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    query = st.text_input("Ask something:")
 
-    context = "\n".join([doc.page_content for doc in docs])
+    if query:
+        llm = ChatOpenAI(model="gpt-3.5-turbo")
 
-  prompt = f"""
+        # Retrieve relevant chunks
+        relevant_docs = retriever.invoke(query)
+        context = "\n".join([doc.page_content for doc in relevant_docs])
+
+        prompt = f"""
+You are an AI resume assistant.
+
+Answer based only on the context below.
+
+Context:
+{context}
+
+Question:
+{query}
+"""
+
+        response = llm.invoke(prompt)
+
+        st.subheader("🤖 Answer")
+        st.write(response.content)
+
+    # -------------------------------
+    # 📄 Job Description Matching
+    # -------------------------------
+    st.subheader("📄 Paste Job Description")
+
+    jd = st.text_area("Paste job description here:")
+
+    if jd:
+        llm = ChatOpenAI(model="gpt-3.5-turbo")
+
+        # Retrieve relevant chunks for JD
+        relevant_docs = retriever.invoke(jd)
+        context = "\n".join([doc.page_content for doc in relevant_docs])
+
+        prompt = f"""
 You are an AI resume evaluator.
 
 Compare the resume with the job description.
 
-Resume:
+Resume Context:
 {context}
 
 Job Description:
-{job_description}
+{jd}
 
-Return output in this format:
+Return output EXACTLY in this format:
 
 Match Score: XX%
 
@@ -74,7 +115,27 @@ Suggestions:
 - suggestion2
 """
 
-    response = llm.invoke(prompt)
+        response = llm.invoke(prompt)
 
-    st.subheader("📊 Resume Analysis:")
-    st.write(response.content)
+        result = response.content
+
+        st.subheader("📊 JD Match Analysis")
+        st.write(result)
+
+        # -------------------------------
+        # 🔥 Extract REAL Score
+        # -------------------------------
+        match = re.search(r"(\d+)%", result)
+
+        if match:
+            score = int(match.group(1))
+        else:
+            score = 50  # fallback
+
+        # -------------------------------
+        # 📊 Display Score
+        # -------------------------------
+        st.subheader("📊 Match Score")
+
+        st.progress(score / 100)
+        st.metric("Match Score", f"{score}%")
